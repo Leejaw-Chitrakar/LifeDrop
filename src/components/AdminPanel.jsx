@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { db, appId } from "../firebase-config";
+import React, { useCallback, useEffect, useState } from "react";
+import { auth, db, appId } from "../firebase-config";
 import { collection, getDocs, query, orderBy, deleteDoc, doc } from "firebase/firestore";
 import { Link, useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
@@ -28,7 +28,7 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
     }
   };
 
-  const fetchDonors = async () => {
+  const fetchDonors = useCallback(async () => {
     setLoadingDonors(true);
     try {
       const q = query(
@@ -47,7 +47,7 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
     } finally {
       setLoadingDonors(false);
     }
-  };
+  }, [showMessage]);
 
   const handleDeleteDonor = async (id) => {
     if (window.confirm("Are you sure you want to delete this donor record? This action cannot be undone.")) {
@@ -83,7 +83,7 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
       const diffTime = Math.abs(today - last);
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return diffDays >= 90; // 3 months roughly 90 days
-    } catch (e) {
+    } catch {
       return true;
     }
   };
@@ -94,14 +94,14 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
       const [y, m, d] = dateString.split("-");
       if (!y || !m || !d) return dateString;
       return `${d}/${m}/${y}`;
-    } catch (e) {
+    } catch {
       return dateString;
     }
   };
 
   useEffect(() => {
     fetchDonors();
-  }, []);
+  }, [fetchDonors]);
 
   return (
     <>
@@ -240,6 +240,7 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
           </div>
           <div className="modal-body">
             <DonorForm 
+              key="admin-add"
               userId="admin-manual" 
               isAdminMode={true}
               showMessage={(text, type) => {
@@ -271,6 +272,7 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
             </div>
             <div className="modal-body">
               <DonorForm 
+                key={editingDonorData?.id || "admin-edit"}
                 userId="admin-edit" 
                 isAdminMode={true}
                 initialData={editingDonorData}

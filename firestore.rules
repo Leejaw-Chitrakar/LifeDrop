@@ -1,8 +1,22 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /artifacts/{appId}/public/data/donors/{document=**} {
-      allow read, write: if true;
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // NOTE: This is a stopgap admin gate enforced by Firestore Rules.
+    // Prefer custom claims for real admin roles when you add a backend.
+    function isAdmin() {
+      return isSignedIn() && request.auth.uid == "2pnop0wEWogayBAjcNQNmfMTxEH3";
+    }
+
+    match /artifacts/{appId}/public/data/donors/{donorDoc} {
+      // Donor registration (anonymous auth counts as signed-in).
+      allow create: if isSignedIn();
+
+      // Admin-only access to donor PII.
+      allow read, update, delete: if isAdmin();
     }
   }
 }

@@ -1,41 +1,82 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { db, appId } from "../firebase-config";
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import NepaliDate from "nepali-date-converter";
 
 const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, initialData = null, onComplete }) => {
-  const [formData, setFormData] = useState(initialData || {
-    fullName: "",
-    dob: "",
-    gender: "",
-    bloodGroup: "",
-    contactNumber: "",
-    email: "",
-    address: "",
-    recentIllness: "",
-    recentTattoo: "",
-    weight: "",
-    recentDonation: "",
-    medication: "",
-    travelHistory: "",
-    chronicConditions: "",
-    dentalWork: "",
-    healthyToday: "",
-    alcoholConsumption: "",
-    goodSleep: "",
-    pregnancyStatus: "",
-    eligibilityCheck: false,
-    lastDonatedDate: "",
-    donationCount: "",
-    donorId: "",
-  });
+  const generateDonorId = () => {
+    const rand4 = () => {
+      if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+        const arr = new Uint16Array(1);
+        crypto.getRandomValues(arr);
+        return String(arr[0] % 9000 + 1000);
+      }
+      return String(Math.floor(1000 + Math.random() * 9000));
+    };
+    return `LD-${rand4()}-${rand4()}`;
+  };
 
-  useEffect(() => {
-    if (!initialData && !formData.donorId) {
-      const newId = `LD-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`;
-      setFormData(prev => ({ ...prev, donorId: newId }));
+  const formatDate = (dateString) => {
+    if (!dateString || dateString === "Null") return "Null";
+    try {
+      if (dateString.includes("/")) return dateString; // Already formatted
+      const [y, m, d] = dateString.split("-");
+      if (!y || !m || !d) return dateString;
+      return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
+    } catch {
+      return dateString;
     }
-  }, [initialData]);
+  };
+
+  const parseDDMMYYYYToDate = (value) => {
+    if (!value || typeof value !== "string") return null;
+    const m = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!m) return null;
+    const d = Number(m[1]);
+    const mo = Number(m[2]);
+    const y = Number(m[3]);
+    if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    const dt = new Date(y, mo - 1, d);
+    // Reject impossible dates like 31/02/2025
+    if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+    return dt;
+  };
+
+  const [formData, setFormData] = useState(() => {
+    const base = {
+      fullName: "",
+      dob: "",
+      gender: "",
+      bloodGroup: "",
+      contactNumber: "",
+      email: "",
+      address: "",
+      recentIllness: "",
+      recentTattoo: "",
+      weight: "",
+      recentDonation: "",
+      medication: "",
+      travelHistory: "",
+      chronicConditions: "",
+      dentalWork: "",
+      healthyToday: "",
+      alcoholConsumption: "",
+      goodSleep: "",
+      pregnancyStatus: "",
+      eligibilityCheck: false,
+      lastDonatedDate: "",
+      donationCount: "",
+      donorId: generateDonorId(),
+    };
+
+    if (!initialData) return base;
+
+    const merged = { ...base, ...initialData };
+    if (merged.dob) merged.dob = formatDate(merged.dob);
+    if (merged.lastDonatedDate) merged.lastDonatedDate = formatDate(merged.lastDonatedDate);
+    if (!merged.donorId) merged.donorId = generateDonorId();
+    return merged;
+  });
 
   const [dateModes, setDateModes] = useState({
     dob: "AD",
@@ -60,7 +101,7 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
       const formattedDate = `${d}/${m}/${y}`;
       
       setFormData(prev => ({ ...prev, [field]: formattedDate }));
-    } catch (e) {
+    } catch {
       console.warn("Invalid Nepali Date");
     }
   };
@@ -71,7 +112,11 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
     
     // If switching to BS, initialize BS values from current AD date if available
     if (newMode === "BS" && formData[field]) {
-      const gDate = new Date(formData[field]);
+      const gDate =
+        formData[field].includes("/")
+          ? parseDDMMYYYYToDate(formData[field])
+          : new Date(formData[field]);
+      if (!gDate || Number.isNaN(gDate.getTime())) return;
       const nDate = new NepaliDate(gDate);
       setBsValues(prev => ({
         ...prev,
@@ -94,29 +139,6 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
       return newData;
     });
   };
-
-
-
-  const formatDate = (dateString) => {
-    if (!dateString || dateString === "Null") return "Null";
-    try {
-      if (dateString.includes("/")) return dateString; // Already formatted
-      const [y, m, d] = dateString.split("-");
-      if (!y || !m || !d) return dateString;
-      return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
-    } catch (e) {
-      return dateString;
-    }
-  };
-
-  useEffect(() => {
-    if (initialData) {
-      const formattedInitial = { ...initialData };
-      if (formattedInitial.dob) formattedInitial.dob = formatDate(formattedInitial.dob);
-      if (formattedInitial.lastDonatedDate) formattedInitial.lastDonatedDate = formatDate(formattedInitial.lastDonatedDate);
-      setFormData(formattedInitial);
-    }
-  }, [initialData]);
 
   const handleDateInputChange = (field, value) => {
     // Only allow numbers and slashes
@@ -242,8 +264,7 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
                 <button 
                   type="button" 
                   onClick={() => {
-                    const newId = `LD-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`;
-                    setFormData(prev => ({ ...prev, donorId: newId }));
+                    setFormData((prev) => ({ ...prev, donorId: generateDonorId() }));
                   }}
                   className="date-mode-toggle"
                   style={{ fontSize: '10px' }}
