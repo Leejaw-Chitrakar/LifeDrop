@@ -33,8 +33,8 @@ const AboutPage = () => {
   const stats = [
     { label: "Lives Saved", value: "10k+", icon: "❤️" },
     { label: "Active Donors", value: "5k+", icon: "👥" },
-    { label: "Hospitals Joined", value: "50+", icon: "🏥" },
-    { label: "Cities Covered", value: "12", icon: "📍" },
+    // { label: "Hospitals Joined", value: "50+", icon: "🏥" },
+    // { label: "Cities Covered", value: "12", icon: "📍" },
   ];
 
   const steps = [

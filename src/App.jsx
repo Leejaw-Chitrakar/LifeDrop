@@ -9,6 +9,7 @@ import MainLayout from "./route layout/MainLayout";
 // Pages
 import RegisterPage from "./pages/RegisterPage";
 import AdminPage from "./pages/AdminPage";
+import DonorLoginPage from "./pages/DonorLoginPage";
 import AboutPage from "./pages/AboutPage";
 import HomePage from "./pages/HomePage";
 import ScrollToTop from "./components/ScrollToTop";
@@ -73,6 +74,18 @@ const App = () => {
                 message={message} 
                 userId={userId}
                 isAdminUid={userId === AUTHORIZED_ADMIN_UID}
+                triggerSuccess={() => setShowOverlay(true)}
+              />
+            }
+          />
+          <Route
+            path="/donor-login"
+            element={
+              <DonorLoginPage
+                userId={userId}
+                isDbReady={isDbReady}
+                message={message}
+                showMessage={showMessage}
                 triggerSuccess={() => setShowOverlay(true)}
               />
             }

@@ -4,6 +4,7 @@ import { collection, addDoc, doc, updateDoc, serverTimestamp } from "firebase/fi
 import NepaliDate from "nepali-date-converter";
 
 const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, initialData = null, onComplete }) => {
+  const isEditing = Boolean(initialData && initialData.id);
   const generateDonorId = () => {
     const rand4 = () => {
       if (typeof crypto !== "undefined" && crypto.getRandomValues) {
@@ -177,7 +178,9 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!isAdminMode && !formData.eligibilityCheck) {
+    // For new registrations, require the eligibility certification checkbox.
+    // When editing an existing donor record, don't require it.
+    if (!isAdminMode && !isEditing && !formData.eligibilityCheck) {
       showMessage("Please confirm your eligibility.", "error");
       return;
     }
@@ -193,7 +196,7 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
       delete dataToSave.id; 
       dataToSave.updatedAt = serverTimestamp();
 
-      if (initialData && initialData.id) {
+      if (isEditing) {
         // Update existing record
         await updateDoc(doc(db, `artifacts/${appId}/public/data/donors`, initialData.id), dataToSave);
         showMessage("Record updated successfully!", "success");
@@ -209,7 +212,9 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
 
       if (onComplete) onComplete();
 
-      if (!isAdminMode) {
+      // Only clear the form after a new registration. When editing an existing
+      // record, clearing can accidentally blank hidden fields on the next save.
+      if (!isAdminMode && !isEditing) {
         setFormData({
           fullName: "",
           dob: "",
@@ -257,33 +262,32 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
 
         <h3 className="section-title">Personal Information</h3>
         <div className="form-grid">
-          <div className="input-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <label htmlFor="donorId">Donor ID {isAdminMode ? "(Editable)" : ""}</label>
-              {isAdminMode && (
-                <button 
-                  type="button" 
+          {isAdminMode && (
+            <div className="input-group">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <label htmlFor="donorId">Donor ID (Editable)</label>
+                <button
+                  type="button"
                   onClick={() => {
                     setFormData((prev) => ({ ...prev, donorId: generateDonorId() }));
                   }}
                   className="date-mode-toggle"
-                  style={{ fontSize: '10px' }}
+                  style={{ fontSize: "10px" }}
                 >
                   🔄 Regenerate ID
                 </button>
-              )}
+              </div>
+              <input
+                type="text"
+                id="donorId"
+                name="donorId"
+                value={formData.donorId}
+                onChange={handleChange}
+                placeholder="LD-XXXX-XXXX"
+                readOnly={false}
+              />
             </div>
-            <input
-              type="text"
-              id="donorId"
-              name="donorId"
-              value={formData.donorId}
-              onChange={handleChange}
-              placeholder={isAdminMode ? "LD-XXXX-XXXX" : "Assigned automatically"}
-              readOnly={!isAdminMode}
-              style={!isAdminMode ? { opacity: 0.7, cursor: 'not-allowed' } : {}}
-            />
-          </div>
+          )}
           <div className="input-group">
             <label htmlFor="fullName">Full Name</label>
             <input
@@ -519,7 +523,7 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
           </div>
         )}
 
-        {!isAdminMode && (
+        {!isAdminMode && !isEditing && (
           <>
             <h3 className="section-title">Eligibility & Health Screening</h3>
             <div className="form-grid">
@@ -587,7 +591,7 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
           </>
         )}
 
-        {!isAdminMode && (
+        {!isAdminMode && !isEditing && (
           <div className="checkbox-container">
             <input
               type="checkbox"

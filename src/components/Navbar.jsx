@@ -21,6 +21,9 @@ const Navbar = () => {
         <Link to="/register" className={location.pathname === "/register" ? "active" : ""}>
           Register
         </Link>
+        <Link to="/donor-login" className={location.pathname === "/donor-login" ? "active" : ""}>
+          My Profile
+        </Link>
       </div>
     </nav>
   );
