@@ -129,10 +129,74 @@ body {
   margin: 0 auto;
 }
 
+/* Mobile Toggle */
+.mobile-toggle {
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  z-index: 1001;
+}
+
+.mobile-toggle span {
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--text-main);
+  transition: all 0.3s;
+}
+
+.mobile-toggle.active span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+.mobile-toggle.active span:nth-child(2) { opacity: 0; }
+.mobile-toggle.active span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+
 @media (max-width: 768px) {
   .hero h1 { font-size: 40px; letter-spacing: -1px; }
   .navbar { padding: 16px 20px; }
-  .nav-links { display: none; }
+  
+  .mobile-toggle {
+    display: flex;
+  }
+
+  .nav-links {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: var(--bg-main);
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 40px;
+    z-index: 1000;
+    transform: translateY(-100%);
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex !important;
+  }
+
+  .nav-links.open {
+    transform: translateY(0);
+  }
+
+  .nav-links a {
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .hero-btns {
+    flex-direction: column;
+    width: 100%;
+    max-width: 300px;
+    margin: 40px auto 0 !important;
+  }
+  .hero-btns > * {
+    width: 100%;
+    text-align: center;
+  }
 }
 
 /* Form Styling */
@@ -246,6 +310,17 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   gap: 16px;
   margin-top: 8px;
+}
+
+@media (max-width: 480px) {
+  .radio-group-container {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .custom-radio {
+    width: 100%;
+    padding: 14px;
+  }
 }
 
 .custom-radio {
@@ -537,6 +612,16 @@ input:focus, select:focus, textarea:focus {
   .admin-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 24px;
+  }
+  .admin-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .admin-actions button, .admin-actions a {
+    flex: 1;
+    min-width: 120px;
+    text-align: center;
   }
 }
 
@@ -937,6 +1022,20 @@ input:focus, select:focus, textarea:focus {
 @media (max-width: 600px) {
   .admin-modal-content { max-height: 98vh; border-radius: 0; }
   .modal-body { padding: 24px; }
+  .modal-header { padding: 16px 20px; }
+  .admin-controls {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+  .search-wrapper, .filters-wrapper {
+    width: 100%;
+  }
+  .filters-wrapper {
+    flex-direction: column;
+  }
+  .filters-wrapper select {
+    width: 100%;
+  }
 }
 
 .btn-delete {
@@ -1018,6 +1117,14 @@ input:focus, select:focus, textarea:focus {
   margin-bottom: 32px;
   padding-bottom: 24px;
   border-bottom: 1px solid var(--border);
+}
+
+@media (max-width: 480px) {
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
 }
 
 .profile-avatar {

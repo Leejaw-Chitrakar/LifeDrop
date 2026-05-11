@@ -82,7 +82,7 @@ const DonorLoginPage = ({ userId, isDbReady, message, showMessage, triggerSucces
       try {
         // Security: we only read documents owned by the current auth session (userId),
         // then we verify that the provided email/date of birth match.
-        const q = query(collection(db, donorsCollectionPath), where("userId", "==", userId));
+        const q = query(collection(db, donorsCollectionPath));
         const querySnapshot = await getDocs(q);
 
         const candidates = querySnapshot.docs.map((d) => ({
@@ -111,8 +111,20 @@ const DonorLoginPage = ({ userId, isDbReady, message, showMessage, triggerSucces
         setLoading(false);
       }
     },
-    [donorsCollectionPath, loginForm.dob, loginForm.email, normalizeDob, normalizeEmail, showMessage, userId]
+    [donorsCollectionPath, loginForm.dob, loginForm.email, normalizeDob, normalizeEmail, showMessage]
   );
+
+  const handleDateInputChange = (value) => {
+    let cleaned = value.replace(/[^0-9]/g, "");
+    let formatted = cleaned;
+    if (cleaned.length > 2) {
+      formatted = cleaned.slice(0, 2) + "/" + cleaned.slice(2);
+    }
+    if (cleaned.length > 4) {
+      formatted = cleaned.slice(0, 2) + "/" + cleaned.slice(2, 4) + "/" + cleaned.slice(4, 8);
+    }
+    setLoginForm(p => ({ ...p, dob: formatted }));
+  };
 
   if (!isDbReady) {
     return (
@@ -154,10 +166,12 @@ const DonorLoginPage = ({ userId, isDbReady, message, showMessage, triggerSucces
               <div className="input-group">
                 <label htmlFor="donorLoginDob">Date of Birth</label>
                 <input
-                  type="date"
+                  type="text"
                   id="donorLoginDob"
                   value={loginForm.dob}
-                  onChange={(e) => setLoginForm((p) => ({ ...p, dob: e.target.value }))}
+                  onChange={(e) => handleDateInputChange(e.target.value)}
+                  placeholder="DD/MM/YYYY"
+                  maxLength="10"
                   required
                 />
               </div>
