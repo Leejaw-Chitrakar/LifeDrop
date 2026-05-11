@@ -1,11 +1,15 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { auth, db, appId } from "../firebase-config";
-import { collection, getDocs, query, orderBy, deleteDoc, doc } from "firebase/firestore";
+import {
+  collection, getDocs, query, orderBy,
+  deleteDoc, doc, setDoc, onSnapshot
+} from "firebase/firestore";
 import { Link, useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import DonorForm from "./DonorForm";
 
 const AdminPanel = ({ showMessage, triggerSuccess }) => {
+  const [activeTab, setActiveTab] = useState("donors"); // "donors" | "admins"
   const [donors, setDonors] = useState([]);
   const [loadingDonors, setLoadingDonors] = useState(false);
   const [isAddingDonor, setIsAddingDonor] = useState(false);
@@ -15,6 +19,15 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterBlood, setFilterBlood] = useState("all");
   const [filterEligible, setFilterEligible] = useState("all");
+
+  // Admin management state
+  const [adminList, setAdminList] = useState([]);
+  const [loadingAdmins, setLoadingAdmins] = useState(false);
+  const [newAdminUid, setNewAdminUid] = useState("");
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [newAdminRole, setNewAdminRole] = useState("admin");
+  const [addingAdmin, setAddingAdmin] = useState(false);
+
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -25,6 +38,54 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
     } catch (error) {
       console.error("Logout failed:", error);
       showMessage("Logout failed.", "error");
+    }
+  };
+
+  // Listen to admins collection in real-time
+  useEffect(() => {
+    setLoadingAdmins(true);
+    const unsubscribe = onSnapshot(collection(db, "admins"), (snap) => {
+      const list = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+      setAdminList(list);
+      setLoadingAdmins(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleAddAdmin = async (e) => {
+    e.preventDefault();
+    if (!newAdminUid.trim()) {
+      showMessage("Please enter a valid UID.", "error");
+      return;
+    }
+    setAddingAdmin(true);
+    try {
+      await setDoc(doc(db, "admins", newAdminUid.trim()), {
+        email: newAdminEmail.trim() || "(not provided)",
+        role: newAdminRole,
+        addedAt: new Date().toISOString().slice(0, 10),
+        addedBy: auth.currentUser?.uid || "unknown",
+      });
+      setNewAdminUid("");
+      setNewAdminEmail("");
+      setNewAdminRole("admin");
+      showMessage("Admin added successfully!", "success");
+    } catch (error) {
+      console.error("Failed to add admin:", error);
+      showMessage("Failed to add admin. Check permissions.", "error");
+    } finally {
+      setAddingAdmin(false);
+    }
+  };
+
+  const handleRemoveAdmin = async (uid, email) => {
+    if (!window.confirm(`Remove admin access for ${email || uid}?`)) return;
+    try {
+      await deleteDoc(doc(db, "admins", uid));
+      showMessage("Admin removed.", "success");
+    } catch (error) {
+      console.error("Failed to remove admin:", error);
+      showMessage("Failed to remove admin.", "error");
     }
   };
 
@@ -105,158 +166,304 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
 
   return (
     <>
-    <main className="admin-container">
-      <div className="admin-header">
-        <div>
-          <h1>Admin Dashboard</h1>
-          <p>Total Registered Donors: {donors.length}</p>
+      <main className="admin-container">
+        <div className="admin-header">
+          <div>
+            <h1>Admin Dashboard</h1>
+            <p>Total Registered Donors: {donors.length}</p>
+          </div>
+          <div className="admin-actions">
+            {activeTab === "donors" && (
+              <>
+                <button onClick={() => setIsAddingDonor(true)} className="btn-primary" style={{ marginRight: '8px' }}>+ Add Donor</button>
+                <button onClick={fetchDonors} className="btn-secondary">Refresh Data</button>
+              </>
+            )}
+            <button onClick={handleLogout} className="btn-secondary" style={{ color: 'var(--primary)', borderColor: 'var(--primary)' }}>Logout</button>
+            <Link to="/" className="btn-primary">Back to Form</Link>
+          </div>
         </div>
-        <div className="admin-actions">
-          <button onClick={() => setIsAddingDonor(true)} className="btn-primary" style={{ marginRight: '8px' }}>+ Add Donor</button>
-          <button onClick={fetchDonors} className="btn-secondary">Refresh Data</button>
-          <button onClick={handleLogout} className="btn-secondary" style={{ color: 'var(--primary)', borderColor: 'var(--primary)' }}>Logout</button>
-          <Link to="/" className="btn-primary">Back to Form</Link>
-        </div>
-      </div>
 
-      <div className="admin-controls" style={{ marginBottom: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <div className="search-wrapper" style={{ flex: 1, minWidth: '300px' }}>
-          <input 
-            type="text" 
-            placeholder="Search by Name or Donor ID..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ width: '100%', padding: '12px 20px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-soft)' }}
-          />
+        {/* Tab Navigation */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid var(--border)', paddingBottom: '0' }}>
+          {[{ id: 'donors', label: '🩸 Donors' }, { id: 'admins', label: '🔐 Manage Admins' }].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                padding: '10px 20px',
+                border: 'none',
+                borderRadius: '10px 10px 0 0',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '14px',
+                transition: 'all 0.2s',
+                background: activeTab === tab.id ? 'var(--primary)' : 'transparent',
+                color: activeTab === tab.id ? '#fff' : 'var(--text-soft)',
+                borderBottom: activeTab === tab.id ? '2px solid var(--primary)' : '2px solid transparent',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-        <div className="filters-wrapper" style={{ display: 'flex', gap: '12px' }}>
-          <select 
-            value={filterBlood} 
-            onChange={(e) => setFilterBlood(e.target.value)}
-            style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-soft)', minWidth: '130px' }}
-          >
-            <option value="all">All Groups</option>
-            {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(g => (
-              <option key={g} value={g}>{g}</option>
-            ))}
-          </select>
-          <select 
-            value={filterEligible} 
-            onChange={(e) => setFilterEligible(e.target.value)}
-            style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-soft)', minWidth: '130px' }}
-          >
-            <option value="all">All Status</option>
-            <option value="yes">Eligible</option>
-            <option value="no">Not Eligible</option>
-          </select>
-        </div>
-      </div>
 
-      <div className="admin-card">
-        {loadingDonors ? (
-          <div className="loading-state">Loading donor data...</div>
-        ) : filteredDonors.length === 0 ? (
-          <div className="empty-state">No donors matching your search criteria.</div>
-        ) : (
-          <div className="table-responsive">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Donor ID</th>
-                  <th>Donor Name</th>
-                  <th>Blood Type</th>
-                  <th>Eligibility Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredDonors.map((donor) => (
-                  <tr key={donor.id}>
-                    <td style={{ fontSize: '12px', color: 'var(--text-soft)', fontFamily: 'monospace' }}>
-                      {donor.donorId || "Pending"}
-                    </td>
-                    <td>
-                      <button 
-                        onClick={() => setSelectedDonor(donor)}
-                        className="donor-name-btn"
-                      >
-                        {donor.fullName || "Null"}
-                      </button>
-                    </td>
-                    <td>
-                      <span className="blood-tag" style={{ border: '1px solid rgba(255,59,59,0.2)' }}>{donor.bloodGroup || "Null"}</span>
-                    </td>
-                    <td>
-                      {(() => {
-                        const isAutoEligible = checkAutoEligibility(donor.lastDonatedDate);
-                        const isManuallyEligible = donor.eligibilityCheck;
-                        const finalEligible = isManuallyEligible && isAutoEligible;
-                        
-                        return (
-                          <span className={finalEligible ? "status-yes" : "status-no"}>
-                            {finalEligible ? "Eligible" : !isAutoEligible ? "Wait (Cooldown)" : "Not Eligible"}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td style={{ display: 'flex', gap: '8px' }}>
-                      <button 
-                        onClick={() => {
-                          setEditingDonorData(donor);
-                          setIsEditingDonor(true);
-                        }}
-                        className="btn-delete"
-                        style={{ borderColor: 'rgba(var(--primary), 0.3)', color: 'var(--text-main)' }}
-                        title="Edit Record"
-                      >
-                        ✏️
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteDonor(donor.id)}
-                        className="btn-delete"
-                        title="Delete Record"
-                      >
-                        🗑️
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* ── ADMIN MANAGEMENT TAB ── */}
+        {activeTab === "admins" && (
+          <div className="tab-content">
+            {/* Add New Admin */}
+            <div className="admin-card" style={{ marginBottom: '24px' }}>
+              <h3 style={{ marginBottom: '20px', fontSize: '16px', fontWeight: '700' }}>➕ Add New Admin</h3>
+              <form onSubmit={handleAddAdmin} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div className="input-group" style={{ flex: '1', minWidth: '220px' }}>
+                  <label>Firebase UID <span style={{ color: 'var(--primary)', fontSize: '11px' }}>*required</span></label>
+                  <input
+                    type="text"
+                    value={newAdminUid}
+                    onChange={(e) => setNewAdminUid(e.target.value)}
+                    placeholder="Paste the user's Firebase UID"
+                    required
+                  />
+                </div>
+                <div className="input-group" style={{ flex: '1', minWidth: '200px' }}>
+                  <label>Email / Label</label>
+                  <input
+                    type="text"
+                    value={newAdminEmail}
+                    onChange={(e) => setNewAdminEmail(e.target.value)}
+                    placeholder="admin@example.com"
+                  />
+                </div>
+                <div className="input-group" style={{ minWidth: '140px' }}>
+                  <label>Role</label>
+                  <select
+                    value={newAdminRole}
+                    onChange={(e) => setNewAdminRole(e.target.value)}
+                    style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-soft)', width: '100%' }}
+                  >
+                    <option value="admin">Admin</option>
+                    <option value="superadmin">Super Admin</option>
+                    <option value="viewer">Viewer</option>
+                  </select>
+                </div>
+                <button type="submit" className="btn-primary" disabled={addingAdmin} style={{ minWidth: '120px', height: '48px' }}>
+                  {addingAdmin ? 'Adding...' : 'Add Admin'}
+                </button>
+              </form>
+              <p style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-soft)' }}>
+                💡 To find a user's UID: have them log in, then check the Session UID shown on the login page.
+              </p>
+            </div>
+
+            {/* Current Admins List */}
+            <div className="admin-card">
+              <h3 style={{ marginBottom: '20px', fontSize: '16px', fontWeight: '700' }}>👥 Current Admins ({adminList.length})</h3>
+              {loadingAdmins ? (
+                <div className="loading-state">Loading admins...</div>
+              ) : adminList.length === 0 ? (
+                <div className="empty-state">No admins found.</div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>UID</th>
+                        <th>Email / Label</th>
+                        <th>Role</th>
+                        <th>Added On</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminList.map((admin) => (
+                        <tr key={admin.uid}>
+                          <td style={{ fontSize: '11px', fontFamily: 'monospace', color: 'var(--text-soft)', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {admin.uid}
+                          </td>
+                          <td>{admin.email || '—'}</td>
+                          <td>
+                            <span style={{
+                              padding: '3px 10px',
+                              borderRadius: '20px',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              background: admin.role === 'superadmin' ? 'rgba(220,50,50,0.15)' : 'rgba(var(--primary-rgb),0.12)',
+                              color: admin.role === 'superadmin' ? '#e03' : 'var(--primary)',
+                              border: admin.role === 'superadmin' ? '1px solid rgba(220,50,50,0.3)' : '1px solid rgba(var(--primary-rgb),0.2)',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.05em'
+                            }}>
+                              {admin.role || 'admin'}
+                            </span>
+                          </td>
+                          <td style={{ fontSize: '13px', color: 'var(--text-soft)' }}>{admin.addedAt || '—'}</td>
+                          <td>
+                            {admin.uid === auth.currentUser?.uid ? (
+                              <span style={{ fontSize: '12px', color: 'var(--text-soft)' }}>(You)</span>
+                            ) : (
+                              <button
+                                onClick={() => handleRemoveAdmin(admin.uid, admin.email)}
+                                className="btn-delete"
+                                title="Revoke admin access"
+                              >
+                                🗑️ Remove
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
-      </div>
-    </main>
-    
-    {isAddingDonor && (
-      <div className="admin-modal-overlay">
-        <div className="admin-modal-content">
-          <div className="modal-header">
-            <h2>Add New Donor Record</h2>
-            <button 
-              onClick={() => setIsAddingDonor(false)} 
-              className="close-btn"
-            >✕</button>
+
+        {/* ── DONORS TAB ── */}
+        {activeTab === "donors" && (
+          <div className="tab-content">
+            <div className="admin-controls" style={{ marginBottom: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div className="search-wrapper" style={{ flex: 1, minWidth: '300px' }}>
+                <input 
+                  type="text" 
+                  placeholder="Search by Name or Donor ID..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{ width: '100%', padding: '12px 20px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-soft)' }}
+                />
+              </div>
+              <div className="filters-wrapper" style={{ display: 'flex', gap: '12px' }}>
+                <select 
+                  value={filterBlood} 
+                  onChange={(e) => setFilterBlood(e.target.value)}
+                  style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-soft)', minWidth: '130px' }}
+                >
+                  <option value="all">All Groups</option>
+                  {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(g => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+                <select 
+                  value={filterEligible} 
+                  onChange={(e) => setFilterEligible(e.target.value)}
+                  style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-soft)', minWidth: '130px' }}
+                >
+                  <option value="all">All Status</option>
+                  <option value="yes">Eligible</option>
+                  <option value="no">Not Eligible</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="admin-card">
+              {loadingDonors ? (
+                <div className="loading-state">Loading donor data...</div>
+              ) : filteredDonors.length === 0 ? (
+                <div className="empty-state">No donors matching your search criteria.</div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Donor ID</th>
+                        <th>Donor Name</th>
+                        <th>Blood Type</th>
+                        <th>Eligibility Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredDonors.map((donor) => (
+                        <tr key={donor.id}>
+                          <td style={{ fontSize: '12px', color: 'var(--text-soft)', fontFamily: 'monospace' }}>
+                            {donor.donorId || "Pending"}
+                          </td>
+                          <td>
+                            <button 
+                              onClick={() => setSelectedDonor(donor)}
+                              className="donor-name-btn"
+                            >
+                              {donor.fullName || "Null"}
+                            </button>
+                          </td>
+                          <td>
+                            <span className="blood-tag" style={{ border: '1px solid rgba(255,59,59,0.2)' }}>{donor.bloodGroup || "Null"}</span>
+                          </td>
+                          <td>
+                            {(() => {
+                              const isAutoEligible = checkAutoEligibility(donor.lastDonatedDate);
+                              const isManuallyEligible = donor.eligibilityCheck;
+                              const finalEligible = isManuallyEligible && isAutoEligible;
+                              
+                              return (
+                                <span className={finalEligible ? "status-yes" : "status-no"}>
+                                  {finalEligible ? "Eligible" : !isAutoEligible ? "Wait (Cooldown)" : "Not Eligible"}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                          <td style={{ display: 'flex', gap: '8px' }}>
+                            <button 
+                              onClick={() => {
+                                setEditingDonorData(donor);
+                                setIsEditingDonor(true);
+                              }}
+                              className="btn-delete"
+                              style={{ borderColor: 'rgba(var(--primary), 0.3)', color: 'var(--text-main)' }}
+                              title="Edit Record"
+                            >
+                              ✏️
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteDonor(donor.id)}
+                              className="btn-delete"
+                              title="Delete Record"
+                            >
+                              🗑️
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="modal-body">
-            <DonorForm 
-              key="admin-add"
-              userId="admin-manual" 
-              isAdminMode={true}
-              showMessage={(text, type) => {
-                showMessage(text, type);
-                if (type === "success") {
-                  setIsAddingDonor(false);
-                  fetchDonors();
-                  if (triggerSuccess) triggerSuccess();
-                }
-              }} 
-            />
+        )}
+      </main>
+
+      {/* Modals */}
+      {isAddingDonor && (
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-content">
+            <div className="modal-header">
+              <h2>Add New Donor Record</h2>
+              <button 
+                onClick={() => setIsAddingDonor(false)} 
+                className="close-btn"
+              >✕</button>
+            </div>
+            <div className="modal-body">
+              <DonorForm 
+                key="admin-add"
+                userId="admin-manual" 
+                isAdminMode={true}
+                showMessage={(text, type) => {
+                  showMessage(text, type);
+                  if (type === "success") {
+                    setIsAddingDonor(false);
+                    fetchDonors();
+                    if (triggerSuccess) triggerSuccess();
+                  }
+                }} 
+              />
+            </div>
           </div>
         </div>
-      </div>
-    )}
-      
+      )}
+        
       {isEditingDonor && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content">
@@ -287,6 +494,7 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
           </div>
         </div>
       )}
+
       {selectedDonor && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content" style={{ maxWidth: '600px' }}>

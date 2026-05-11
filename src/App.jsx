@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { auth } from "./firebase-config";
+import { auth, db } from "./firebase-config";
 import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { doc, onSnapshot } from "firebase/firestore";
 
 // Layout
 import MainLayout from "./route layout/MainLayout";
@@ -15,33 +16,49 @@ import HomePage from "./pages/HomePage";
 import ScrollToTop from "./components/ScrollToTop";
 import SuccessOverlay from "./components/SuccessOverlay";
 
-const AUTHORIZED_ADMIN_UID = "2pnop0wEWogayBAjcNQNmfMTxEH3";
-
 const App = () => {
   const [showOverlay, setShowOverlay] = useState(false);
   const [isDbReady, setIsDbReady] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
   const [userId, setUserId] = useState(null);
+  const [isAdminUid, setIsAdminUid] = useState(false);
 
+  // Listen to auth state changes
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-          if (user) {
-            setUserId(user.uid);
-          } else {
-            signInAnonymously(auth).catch(console.error);
-          }
-          setIsDbReady(true);
-        });
-        return () => unsubscribe();
-      } catch (error) {
-        console.error("Auth initialization failed:", error);
-        setIsDbReady(true);
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        setIsAdminUid(false);
+        signInAnonymously(auth).catch(console.error);
       }
-    };
-    initAuth();
+      setIsDbReady(true);
+    });
+    return () => unsubscribeAuth();
   }, []);
+
+  // When userId changes, check if they're in the admins collection or match the .env superadmin
+  useEffect(() => {
+    if (!userId) {
+      setIsAdminUid(false);
+      return;
+    }
+
+    // Check if user is in the superadmin list defined in .env
+    const superAdminUids = (import.meta.env.VITE_ADMIN_UID || "").split(",");
+    if (superAdminUids.includes(userId)) {
+      setIsAdminUid(true);
+      return;
+    }
+
+    // Otherwise, check the dynamic admins collection in Firestore
+    const adminDocRef = doc(db, "admins", userId);
+    const unsubscribeAdmin = onSnapshot(adminDocRef, (snap) => {
+      setIsAdminUid(snap.exists());
+    });
+    return () => unsubscribeAdmin();
+  }, [userId]);
 
   const showMessage = (text, type) => {
     setMessage({ text, type });
@@ -69,11 +86,11 @@ const App = () => {
           <Route
             path="/admin"
             element={
-              <AdminPage 
-                showMessage={showMessage} 
-                message={message} 
+              <AdminPage
+                showMessage={showMessage}
+                message={message}
                 userId={userId}
-                isAdminUid={userId === AUTHORIZED_ADMIN_UID}
+                isAdminUid={isAdminUid}
                 triggerSuccess={() => setShowOverlay(true)}
               />
             }

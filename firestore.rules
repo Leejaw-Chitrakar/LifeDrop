@@ -5,14 +5,20 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // NOTE: This is a stopgap admin gate enforced by Firestore Rules.
-    // Prefer custom claims for real admin roles when you add a backend.
+    // Admin check: look up the requesting user's UID in the /admins collection.
+    // This supports multiple admins — simply add a document with the UID as the doc ID.
     function isAdmin() {
-      return isSignedIn() && request.auth.uid == "2pnop0wEWogayBAjcNQNmfMTxEH3";
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
     function isOwner() {
       return isSignedIn() && request.auth.uid == resource.data.userId;
+    }
+
+    // The admins collection itself: only admins can read/write it.
+    match /admins/{adminId} {
+      allow read, write: if isAdmin();
     }
 
     match /artifacts/{appId}/public/data/donors/{donorDoc} {
