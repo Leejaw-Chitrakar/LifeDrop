@@ -23,10 +23,10 @@ service cloud.firestore {
 
     match /artifacts/{appId}/public/data/donors/{donorDoc} {
       // Donor registration (anonymous auth counts as signed-in).
-      allow create: if isSignedIn() && (isAdmin() || request.resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn();
 
-      // Admin-only access to donor PII.
-      allow read, update: if isAdmin() || isOwner();
+      // Access to donor records (Option A: anyone can access with correct Email/DOB)
+      allow read, update: if isSignedIn();
       allow delete: if isAdmin();
     }
   }

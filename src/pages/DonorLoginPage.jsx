@@ -1,6 +1,8 @@
 import React, { useCallback, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
-import { db, appId } from "../firebase-config";
+import { signInAnonymously } from "firebase/auth";
+import { auth, db, appId } from "../firebase-config";
 import DonorForm from "../components/DonorForm";
 
 const DonorLoginPage = ({ userId, isDbReady, message, showMessage, triggerSuccess }) => {
@@ -65,9 +67,17 @@ const DonorLoginPage = ({ userId, isDbReady, message, showMessage, triggerSucces
   const handleLogin = useCallback(
     async (e) => {
       e.preventDefault();
-      if (!userId) {
-        showMessage("Please wait for session initialization.", "error");
-        return;
+      
+      let currentUserId = userId;
+      if (!currentUserId) {
+        try {
+          const userCredential = await signInAnonymously(auth);
+          currentUserId = userCredential.user.uid;
+        } catch (authError) {
+          console.error("Anonymous auth failed:", authError);
+          showMessage("Authentication failed. Please try again.", "error");
+          return;
+        }
       }
 
       const email = normalizeEmail(loginForm.email);
@@ -80,26 +90,35 @@ const DonorLoginPage = ({ userId, isDbReady, message, showMessage, triggerSucces
 
       setLoading(true);
       try {
-        // Security: we only read documents owned by the current auth session (userId),
-        // then we verify that the provided email/date of birth match.
-        const q = query(collection(db, donorsCollectionPath));
+        // Optimized: Query only for the matching donor instead of fetching all
+        const q = query(
+          collection(db, donorsCollectionPath),
+          where("email", "==", email),
+          where("dob", "==", dob)
+        );
         const querySnapshot = await getDocs(q);
 
-        const candidates = querySnapshot.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        }));
-
-        const found = candidates.find(
-          (d) =>
-            normalizeEmail(d.email) === email &&
-            normalizeDob(d.dob) === dob
-        );
-
-        if (!found) {
+        if (querySnapshot.empty) {
           setDonor(null);
           showMessage("No saved donor profile found for that email and date of birth.", "error");
           return;
+        }
+
+        // Take the first match
+        const found = {
+          id: querySnapshot.docs[0].id,
+          ...querySnapshot.docs[0].data()
+        };
+
+        // Update the record's userId to the current session so the user 'owns' it on this device too
+        if (found.userId !== currentUserId) {
+          try {
+            await updateDoc(doc(db, donorsCollectionPath, found.id), {
+              userId: currentUserId
+            });
+          } catch (updateErr) {
+            console.warn("Could not update ownership, but profile loaded:", updateErr);
+          }
         }
 
         setDonor(found);
@@ -180,6 +199,15 @@ const DonorLoginPage = ({ userId, isDbReady, message, showMessage, triggerSucces
                 {loading ? "Loading..." : "Login"}
               </button>
             </form>
+
+            <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '14px' }}>
+              <p style={{ color: 'var(--text-soft)' }}>
+                Don't have a profile yet?{" "}
+                <Link to="/register" style={{ color: 'var(--primary)', fontWeight: '700', textDecoration: 'none' }}>
+                  Register as a Donor
+                </Link>
+              </p>
+            </div>
           </div>
         </section>
       ) : (

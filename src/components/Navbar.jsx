@@ -30,7 +30,12 @@ const Navbar = () => {
         <Link to="/about" className={location.pathname === "/about" ? "active" : ""} onClick={() => setIsOpen(false)}>
           About
         </Link>
-        <Link to="/register" className={location.pathname === "/register" ? "active" : ""} onClick={() => setIsOpen(false)}>
+        <Link 
+          to="/register" 
+          className={location.pathname === "/register" ? "active btn-primary" : "btn-primary"} 
+          onClick={() => setIsOpen(false)}
+          style={{ padding: '10px 20px', color: '#fff' }}
+        >
           Register
         </Link>
         <Link to="/donor-login" className={location.pathname === "/donor-login" ? "active" : ""} onClick={() => setIsOpen(false)}>

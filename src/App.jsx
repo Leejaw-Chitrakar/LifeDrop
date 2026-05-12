@@ -22,18 +22,21 @@ const App = () => {
   const [message, setMessage] = useState({ text: "", type: "" });
   const [userId, setUserId] = useState(null);
   const [isAdminUid, setIsAdminUid] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState(false);
 
   // Listen to auth state changes
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUserId(user.uid);
+        setIsAnonymous(user.isAnonymous);
+        setIsDbReady(true);
       } else {
         setUserId(null);
         setIsAdminUid(false);
-        signInAnonymously(auth).catch(console.error);
+        setIsAnonymous(false);
+        setIsDbReady(true); // Database logic is ready, even if user is not logged in
       }
-      setIsDbReady(true);
     });
     return () => unsubscribeAuth();
   }, []);
@@ -91,6 +94,7 @@ const App = () => {
                 message={message}
                 userId={userId}
                 isAdminUid={isAdminUid}
+                isAnonymous={isAnonymous}
                 triggerSuccess={() => setShowOverlay(true)}
               />
             }

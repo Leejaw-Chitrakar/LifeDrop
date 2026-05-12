@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { db, appId } from "../firebase-config";
+import { auth, db, appId } from "../firebase-config";
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { signInAnonymously } from "firebase/auth";
 import NepaliDate from "nepali-date-converter";
 
 const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, initialData = null, onComplete }) => {
@@ -191,6 +192,20 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
     }
 
     try {
+      let currentUserId = userId;
+      
+      // If not logged in and not in admin mode, sign in anonymously first
+      if (!currentUserId && !isAdminMode) {
+        try {
+          const userCredential = await signInAnonymously(auth);
+          currentUserId = userCredential.user.uid;
+        } catch (authError) {
+          console.error("Anonymous auth failed:", authError);
+          showMessage("Authentication failed. Please try again.", "error");
+          return;
+        }
+      }
+
       const submissionData = prepareDataForSubmission(formData);
       const dataToSave = { ...submissionData };
       delete dataToSave.id; 
@@ -203,7 +218,7 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
       } else {
         // Create new record
         dataToSave.timestamp = serverTimestamp();
-        dataToSave.userId = userId;
+        dataToSave.userId = currentUserId;
         dataToSave.appId = appId;
         await addDoc(collection(db, `artifacts/${appId}/public/data/donors`), dataToSave);
         showMessage("Registration successful! Thank you for being a hero.", "success");
