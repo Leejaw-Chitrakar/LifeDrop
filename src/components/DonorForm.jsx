@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { auth, db, appId } from "../firebase-config";
-import { collection, addDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc, serverTimestamp, getDocs, query, where } from "firebase/firestore";
 import { signInAnonymously } from "firebase/auth";
 import NepaliDate from "nepali-date-converter";
 
@@ -65,7 +65,7 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
       alcoholConsumption: "",
       goodSleep: "",
       pregnancyStatus: "",
-      eligibilityCheck: false,
+      eligibilityCheck: true,
       lastDonatedDate: "",
       donationCount: "",
       donorId: generateDonorId(),
@@ -179,19 +179,71 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // For new registrations, require the eligibility certification checkbox.
-    // When editing an existing donor record, don't require it.
-    if (!isAdminMode && !isEditing && !formData.eligibilityCheck) {
-      showMessage("Please confirm your eligibility.", "error");
-      return;
+    const submissionData = prepareDataForSubmission(formData);
+
+    if (submissionData.weight) {
+      const weight = parseFloat(submissionData.weight);
+      if (submissionData.gender === 'female' && weight <= 45) {
+        showMessage("Weight must be above 45kg for females.", "error");
+        return;
+      }
+      if (submissionData.gender === 'male' && weight <= 50) {
+        showMessage("Weight must be above 50kg for males.", "error");
+        return;
+      }
     }
 
-    if (formData.weight && parseFloat(formData.weight) < 45) {
-      showMessage("Minimum weight for donation is 45kg.", "error");
-      return;
+    if (submissionData.dob) {
+      const dobDate = new Date(submissionData.dob);
+      if (!isNaN(dobDate.getTime())) {
+        const today = new Date();
+        let age = today.getFullYear() - dobDate.getFullYear();
+        const m = today.getMonth() - dobDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < dobDate.getDate())) {
+          age--;
+        }
+        if (age < 18) {
+          showMessage("You must be at least 18 years old to donate.", "error");
+          return;
+        }
+      }
+    }
+
+    if (submissionData.lastDonatedDate) {
+      const lastDonated = new Date(submissionData.lastDonatedDate);
+      if (!isNaN(lastDonated.getTime())) {
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        if (lastDonated > threeMonthsAgo) {
+          showMessage("You must wait at least 3 months since your last donation.", "error");
+          return;
+        }
+      }
     }
 
     try {
+      if (!isEditing) {
+        const donorsRef = collection(db, `artifacts/${appId}/public/data/donors`);
+        
+        if (submissionData.contactNumber) {
+          const qContact = query(donorsRef, where("contactNumber", "==", submissionData.contactNumber));
+          const contactSnap = await getDocs(qContact);
+          if (!contactSnap.empty) {
+            showMessage("A donor with this contact number is already registered.", "error");
+            return;
+          }
+        }
+        
+        if (submissionData.email) {
+          const qEmail = query(donorsRef, where("email", "==", submissionData.email));
+          const emailSnap = await getDocs(qEmail);
+          if (!emailSnap.empty) {
+            showMessage("A donor with this email address is already registered.", "error");
+            return;
+          }
+        }
+      }
+
       let currentUserId = userId;
       
       // If not logged in and not in admin mode, sign in anonymously first
@@ -206,7 +258,6 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
         }
       }
 
-      const submissionData = prepareDataForSubmission(formData);
       const dataToSave = { ...submissionData };
       delete dataToSave.id; 
       dataToSave.updatedAt = serverTimestamp();
@@ -250,7 +301,7 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
           alcoholConsumption: "",
           goodSleep: "",
           pregnancyStatus: "",
-          eligibilityCheck: false,
+          eligibilityCheck: true,
           lastDonatedDate: "",
           donationCount: "",
           donorId: "",
@@ -538,90 +589,7 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
           </div>
         )}
 
-        {!isAdminMode && !isEditing && (
-          <>
-            <h3 className="section-title">Eligibility & Health Screening</h3>
-            <div className="form-grid">
-              {["healthyToday", "recentDonation", "medication", "recentIllness", "recentTattoo", "travelHistory", "chronicConditions", "dentalWork", "alcoholConsumption", "goodSleep"].map((field) => (
-                <div key={field} className="input-group full-width">
-                  <label className="question">
-                    {field === "healthyToday" && "Do you feel healthy and well today?"}
-                    {field === "recentDonation" && "Have you donated blood in the last 3 months?"}
-                    {field === "recentDonation" && "Have you donated blood in the last 3 months?"}
-                    {field === "medication" && "Are you currently taking any medications?"}
-                    {field === "recentIllness" && "Have you had any major illness or surgery in the last 6 months?"}
-                    {field === "recentTattoo" && "Have you received a tattoo or piercing in the last 6 months?"}
-                    {field === "travelHistory" && "Have you traveled outside the country in the last 6 months?"}
-                    {field === "chronicConditions" && "Do you have any chronic conditions (e.g., Diabetes)?"}
-                    {field === "dentalWork" && "Have you had any dental procedures in the last 7 days?"}
-                    {field === "alcoholConsumption" && "Have you consumed alcohol in the last 24 hours?"}
-                    {field === "goodSleep" && "Did you get at least 6 hours of sleep last night?"}
-                  </label>
-                  <div className="radio-group-container">
-                    {["yes", "no"].map((val) => (
-                      <label key={val} className="custom-radio">
-                        <input
-                          type="radio"
-                          name={field}
-                          value={val}
-                          checked={formData[field] === val}
-                          onChange={handleChange}
-                          required={!isAdminMode}
-                        />
-                        <span className="radio-label">
-                          {val.charAt(0).toUpperCase() + val.slice(1)}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ))}
 
-              {formData.gender === "female" && (
-                <div className="input-group full-width">
-                  <label className="question">
-                    Are you currently pregnant, nursing, or have you had a
-                    pregnancy in the last 6 months?
-                  </label>
-                  <div className="radio-group-container">
-                    {["yes", "no"].map((val) => (
-                      <label key={val} className="custom-radio">
-                        <input
-                          type="radio"
-                          name="pregnancyStatus"
-                          value={val}
-                          checked={formData.pregnancyStatus === val}
-                          onChange={handleChange}
-                          required={!isAdminMode && formData.gender === "female"}
-                        />
-                        <span className="radio-label">
-                          {val.charAt(0).toUpperCase() + val.slice(1)}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {!isAdminMode && !isEditing && (
-          <div className="checkbox-container">
-            <input
-              type="checkbox"
-              id="eligibilityCheck"
-              name="eligibilityCheck"
-              checked={formData.eligibilityCheck}
-              onChange={handleChange}
-              required
-            />
-            <label htmlFor="eligibilityCheck">
-              I certify that I meet the basic eligibility requirements and the
-              information provided is true.
-            </label>
-          </div>
-        )}
 
         <button type="submit" className="submit-btn" style={{ marginBottom: '12px' }}>
           {initialData ? "Save Changes" : "Complete Registration"}

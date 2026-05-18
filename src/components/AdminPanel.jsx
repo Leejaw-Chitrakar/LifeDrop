@@ -19,6 +19,7 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterBlood, setFilterBlood] = useState("all");
   const [filterEligible, setFilterEligible] = useState("all");
+  const [sortBy, setSortBy] = useState("name-asc");
 
   // Admin management state
   const [adminList, setAdminList] = useState([]);
@@ -124,16 +125,31 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
   };
 
   const filteredDonors = donors.filter(donor => {
-    const matchesSearch = 
+    const matchesSearch =
       (donor.fullName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (donor.donorId?.toLowerCase().includes(searchTerm.toLowerCase()));
-    
+
     const matchesBlood = filterBlood === "all" || donor.bloodGroup === filterBlood;
-    const matchesEligible = filterEligible === "all" || 
+    const matchesEligible = filterEligible === "all" ||
       (filterEligible === "yes" && donor.eligibilityCheck) ||
       (filterEligible === "no" && !donor.eligibilityCheck);
 
     return matchesSearch && matchesBlood && matchesEligible;
+  }).sort((a, b) => {
+    if (sortBy === "name-asc") {
+      return (a.fullName || "").localeCompare(b.fullName || "", undefined, { sensitivity: 'base' });
+    } else if (sortBy === "name-desc") {
+      return (b.fullName || "").localeCompare(a.fullName || "", undefined, { sensitivity: 'base' });
+    } else if (sortBy === "date-desc") {
+      const timeA = a.timestamp?.seconds || 0;
+      const timeB = b.timestamp?.seconds || 0;
+      return timeB - timeA;
+    } else if (sortBy === "date-asc") {
+      const timeA = a.timestamp?.seconds || 0;
+      const timeB = b.timestamp?.seconds || 0;
+      return timeA - timeB;
+    }
+    return 0;
   });
 
   const checkAutoEligibility = (lastDate) => {
@@ -325,29 +341,39 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
           <div className="tab-content">
             <div className="admin-controls" style={{ marginBottom: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
               <div className="search-wrapper" style={{ flex: 1, minWidth: '300px' }}>
-                <input 
-                  type="text" 
-                  placeholder="Search by Name or Donor ID..." 
+                <input
+                  type="text"
+                  placeholder="Search by Name or Donor ID..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   style={{ width: '100%', padding: '12px 20px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-soft)' }}
                 />
               </div>
-              <div className="filters-wrapper" style={{ display: 'flex', gap: '12px' }}>
-                <select 
-                  value={filterBlood} 
+              <div className="filters-wrapper" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-soft)', fontSize: '14px' }}
+                >
+                  <option value="name-asc">A-Z</option>
+                  <option value="name-desc">Z-A</option>
+                  <option value="date-desc">Newest</option>
+                  <option value="date-asc">Oldest</option>
+                </select>
+                <select
+                  value={filterBlood}
                   onChange={(e) => setFilterBlood(e.target.value)}
-                  style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-soft)', minWidth: '130px' }}
+                  style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-soft)', fontSize: '14px' }}
                 >
                   <option value="all">All Groups</option>
                   {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(g => (
                     <option key={g} value={g}>{g}</option>
                   ))}
                 </select>
-                <select 
-                  value={filterEligible} 
+                <select
+                  value={filterEligible}
                   onChange={(e) => setFilterEligible(e.target.value)}
-                  style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-soft)', minWidth: '130px' }}
+                  style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-soft)', fontSize: '14px' }}
                 >
                   <option value="all">All Status</option>
                   <option value="yes">Eligible</option>
@@ -380,7 +406,7 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
                             {donor.donorId || "Pending"}
                           </td>
                           <td>
-                            <button 
+                            <button
                               onClick={() => setSelectedDonor(donor)}
                               className="donor-name-btn"
                             >
@@ -395,7 +421,7 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
                               const isAutoEligible = checkAutoEligibility(donor.lastDonatedDate);
                               const isManuallyEligible = donor.eligibilityCheck;
                               const finalEligible = isManuallyEligible && isAutoEligible;
-                              
+
                               return (
                                 <span className={finalEligible ? "status-yes" : "status-no"}>
                                   {finalEligible ? "Eligible" : !isAutoEligible ? "Wait (Cooldown)" : "Not Eligible"}
@@ -404,7 +430,7 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
                             })()}
                           </td>
                           <td style={{ display: 'flex', gap: '8px' }}>
-                            <button 
+                            <button
                               onClick={() => {
                                 setEditingDonorData(donor);
                                 setIsEditingDonor(true);
@@ -415,7 +441,7 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
                             >
                               ✏️
                             </button>
-                            <button 
+                            <button
                               onClick={() => handleDeleteDonor(donor.id)}
                               className="btn-delete"
                               title="Delete Record"
@@ -440,15 +466,15 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
           <div className="admin-modal-content">
             <div className="modal-header">
               <h2>Add New Donor Record</h2>
-              <button 
-                onClick={() => setIsAddingDonor(false)} 
+              <button
+                onClick={() => setIsAddingDonor(false)}
                 className="close-btn"
               >✕</button>
             </div>
             <div className="modal-body">
-              <DonorForm 
+              <DonorForm
                 key="admin-add"
-                userId="admin-manual" 
+                userId="admin-manual"
                 isAdminMode={true}
                 showMessage={(text, type) => {
                   showMessage(text, type);
@@ -457,30 +483,30 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
                     fetchDonors();
                     if (triggerSuccess) triggerSuccess();
                   }
-                }} 
+                }}
               />
             </div>
           </div>
         </div>
       )}
-        
+
       {isEditingDonor && (
         <div className="admin-modal-overlay">
           <div className="admin-modal-content">
             <div className="modal-header">
               <h2>Edit Donor: {editingDonorData?.fullName}</h2>
-              <button 
+              <button
                 onClick={() => {
                   setIsEditingDonor(false);
                   setEditingDonorData(null);
-                }} 
+                }}
                 className="close-btn"
               >✕</button>
             </div>
             <div className="modal-body">
-              <DonorForm 
+              <DonorForm
                 key={editingDonorData?.id || "admin-edit"}
-                userId="admin-edit" 
+                userId="admin-edit"
                 isAdminMode={true}
                 initialData={editingDonorData}
                 onComplete={() => {
@@ -488,7 +514,7 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
                   setEditingDonorData(null);
                   fetchDonors();
                 }}
-                showMessage={showMessage} 
+                showMessage={showMessage}
               />
             </div>
           </div>
@@ -560,7 +586,7 @@ const AdminPanel = ({ showMessage, triggerSuccess }) => {
                   </p>
                 </div>
               </div>
-              
+
               <div style={{ marginTop: '32px' }}>
                 <button onClick={() => setSelectedDonor(null)} className="btn-secondary" style={{ width: '100%' }}>Close Profile</button>
               </div>

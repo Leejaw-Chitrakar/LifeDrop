@@ -77,7 +77,7 @@ const HomePage = () => {
             Your Blood Can <span className="highlight">Save</span> Three Lives
           </h1>
           <p>
-            Join the world's most efficient blood donation network. We connect heroes like you with patients in urgent need within minutes.
+            Join the world's most efficient blood donation network. We connect heroes like you with patients in urgent need within minutes. Don't just give—be part of a community where you can also receive when you need it most.
           </p>
           <div className="hero-btns" style={{ marginTop: '40px', display: 'flex', gap: '16px', justifyContent: 'center' }}>
             <Link to="/register" className="btn-primary">Become a Donor</Link>
