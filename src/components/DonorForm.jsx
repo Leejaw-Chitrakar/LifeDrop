@@ -222,7 +222,9 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
     }
 
     try {
-      if (!isEditing) {
+      let currentUserId = userId || "anonymous";
+
+      if (!isEditing && isAdminMode) {
         const donorsRef = collection(db, `artifacts/${appId}/public/data/donors`);
         
         if (submissionData.contactNumber) {
@@ -241,20 +243,6 @@ const DonorForm = ({ userId, showMessage, triggerSuccess, isAdminMode = false, i
             showMessage("A donor with this email address is already registered.", "error");
             return;
           }
-        }
-      }
-
-      let currentUserId = userId;
-      
-      // If not logged in and not in admin mode, sign in anonymously first
-      if (!currentUserId && !isAdminMode) {
-        try {
-          const userCredential = await signInAnonymously(auth);
-          currentUserId = userCredential.user.uid;
-        } catch (authError) {
-          console.error("Anonymous auth failed:", authError);
-          showMessage("Authentication failed. Please try again.", "error");
-          return;
         }
       }
 
